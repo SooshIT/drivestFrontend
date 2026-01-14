@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 16.28.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SENTRY_DSN": "https://ee0ecd122d0da39dce34567fd5d88b8f@o4510616324341760.ingest.de.sentry.io/4510622021517392",
+        "EXPO_PUBLIC_SENTRY_ENV": "preview"
+      }
+    },
+    "production": {
+      "distribution": "internal",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
