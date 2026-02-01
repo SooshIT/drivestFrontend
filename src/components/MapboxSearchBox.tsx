@@ -28,6 +28,15 @@ const MapboxSearchBox: React.FC<MapboxSearchBoxProps> = ({
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const sessionToken = useRef(`session-${Date.now()}`);
 
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (initialValue) {
       setInput(initialValue);

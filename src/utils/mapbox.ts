@@ -3,7 +3,7 @@ import { SearchResult } from '../types/mapbox';
 /**
  * Format Mapbox search results for display
  */
-export function formatSearchResult(result: any): string {
+export function formatSearchResult(result: SearchResult): string {
   return result.place_name || result.text || '';
 }
 

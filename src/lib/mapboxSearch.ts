@@ -11,6 +11,12 @@ const geocodingClient = token ? mbxGeocoding({ accessToken: token }) : null;
 // Cache for reverse geocoding results to minimize API calls
 const reverseGeocodeCache = new Map<string, ReverseGeocodeResult>();
 
+// Type for Mapbox context items
+interface MapboxContext {
+  id: string;
+  text: string;
+}
+
 /**
  * Forward geocoding: Convert addresses/place names to coordinates
  * @param query - The search query (address, place name, postcode)
@@ -85,12 +91,12 @@ export async function reverseGeocode(
     }
 
     const feature = response.body.features[0];
-    const context = feature.context || [];
+    const context = (feature.context || []) as MapboxContext[];
     
     // Extract postcode and city from context
-    const postcodeContext = context.find((c: any) => c.id.startsWith('postcode'));
-    const placeContext = context.find((c: any) => c.id.startsWith('place'));
-    const regionContext = context.find((c: any) => c.id.startsWith('region'));
+    const postcodeContext = context.find((c) => c.id.startsWith('postcode'));
+    const placeContext = context.find((c) => c.id.startsWith('place'));
+    const regionContext = context.find((c) => c.id.startsWith('region'));
 
     const result: ReverseGeocodeResult = {
       address: feature.place_name,

@@ -11,9 +11,9 @@ interface Props {
 
 const CentreCard: React.FC<Props> = ({ centre, onPress }) => {
   // Format address display - show address if available, otherwise show city and postcode
-  const addressDisplay = centre.address 
+  const addressDisplay = centre.address && centre.city
     ? `${centre.address}, ${centre.city}` 
-    : `${centre.city}, ${centre.postcode}`;
+    : centre.city || centre.postcode;
 
   return (
     <Card style={styles.card} onPress={onPress}>
