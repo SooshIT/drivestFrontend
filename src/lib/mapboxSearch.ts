@@ -31,7 +31,7 @@ export async function searchPlaces(
         query,
         countries: ['gb'], // Restrict to UK
         limit: 5,
-        proximity: proximity ? { longitude: proximity[0], latitude: proximity[1] } : undefined,
+        proximity: proximity ? [proximity[0], proximity[1]] : undefined,
         autocomplete: true,
       })
       .send();
