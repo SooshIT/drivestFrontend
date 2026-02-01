@@ -63,6 +63,15 @@ Copy `frontend/.env.example` to `.env` and update:
 - `EXPO_PUBLIC_SENTRY_DSN` - Sentry DSN.
 - `EXPO_PUBLIC_SENTRY_ENV` - Sentry environment label.
 
+## Sentry + EAS builds
+- Sourcemap upload requires `SENTRY_AUTH_TOKEN` plus org/project (`SENTRY_ORG`, `SENTRY_PROJECT`).
+- EAS `preview` and `production` profiles set `SENTRY_ALLOW_FAILURE=true`, so builds succeed even without credentials.
+- Defaults are configured via `frontend/android/sentry.properties` and the Expo plugin in `frontend/app.config.ts`.
+- Configure secrets in EAS (Project Settings → Environment variables/secrets):
+  - `SENTRY_AUTH_TOKEN` (required for uploads)
+  - `SENTRY_ORG` and `SENTRY_PROJECT` (override defaults if needed)
+- For local release builds, ensure `NODE_ENV=production` and optionally set `SENTRY_ALLOW_FAILURE=true` to skip failing uploads.
+
 ## Setup
 1. `cd frontend`
 2. `npm install`
@@ -76,6 +85,7 @@ Mapbox, RevenueCat, and the custom Mapbox Navigation SDK view require a dev clie
 - `npm start` - Expo dev server
 - `npm run ios` - iOS simulator / device
 - `npm run android` - Android emulator / device
+- `npm run android:release` - Android release build (sets `NODE_ENV=production`)
 - `npm run web` - web preview
 - `npm test` - Jest tests
 

@@ -28,7 +28,7 @@ const CarPuck = ({
   modelTranslation = [0, 0, 1.2],
   iconSize = 0.12,
 }: CarPuckProps) => {
-  const supportsModelLayer = !!(MapboxGL.Models && MapboxGL.ModelLayer);
+  const supportsModelLayer = use3D && MapboxGL.hasOwnProperty('Models') && MapboxGL.hasOwnProperty('ModelLayer');
   const render3D = use3D && supportsModelLayer;
   const modelId = `${id}-model`;
   const iconId = `${id}-icon`;
@@ -66,7 +66,7 @@ const CarPuck = ({
     );
   }
 
-  const iconRotation = rotateWithMap ? ['get', 'bearing'] : 0;
+  const iconRotation = rotateWithMap ? (['get', 'bearing'] as any) : 0;
   const rotationAlignment = rotateWithMap ? 'map' : 'viewport';
   return (
     <>

@@ -103,6 +103,78 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
   const [polyline, setPolyline] = useState<LatLng[]>(
     initialRoute ? sanitizeCoords(getRouteCoords(initialRoute)) : [],
   );
+
+  const [speedLimits, setSpeedLimits] = useState<Array<{lat: number, lon: number, speed: number}>>([]);
+  const [trafficControls, setTrafficControls] = useState<Array<{lat: number, lon: number, type: string}>>([]);
+
+  // Fetch route details if payload is missing
+  useEffect(() => {
+    if (routeDto && !routeDto.payload && routeDto.id) {
+      apiRoutes.detail(routeDto.id).then((res) => {
+        const data = res.data.data || res.data;
+        const updated = { ...routeDto, ...data };
+        setRouteDto(updated);
+        setPolyline(sanitizeCoords(getRouteCoords(updated)));
+        
+        // Extract speed limits and controls from instructions
+        if (updated.payload?.instructions) {
+          const speeds: Array<{lat: number, lon: number, speed: number}> = [];
+          const controls: Array<{lat: number, lon: number, type: string}> = [];
+          
+          updated.payload.instructions.forEach((ins: any) => {
+            if (ins.speed_limit_mph_final && ins.location) {
+              speeds.push({
+                lat: ins.location.lat,
+                lon: ins.location.lon,
+                speed: ins.speed_limit_mph_final
+              });
+            }
+            if (ins.traffic_signals && Array.isArray(ins.traffic_signals) && ins.location) {
+              ins.traffic_signals.forEach(() => {
+                controls.push({
+                  lat: ins.location.lat,
+                  lon: ins.location.lon,
+                  type: 'traffic_signals'
+                });
+              });
+            }
+            if (ins.stop && Array.isArray(ins.stop) && ins.location) {
+              ins.stop.forEach(() => {
+                controls.push({
+                  lat: ins.location.lat,
+                  lon: ins.location.lon,
+                  type: 'stop'
+                });
+              });
+            }
+            if (ins.give_way && Array.isArray(ins.give_way) && ins.location) {
+              ins.give_way.forEach(() => {
+                controls.push({
+                  lat: ins.location.lat,
+                  lon: ins.location.lon,
+                  type: 'give_way'
+                });
+              });
+            }
+            if (ins.crossing && Array.isArray(ins.crossing) && ins.location) {
+              ins.crossing.forEach(() => {
+                controls.push({
+                  lat: ins.location.lat,
+                  lon: ins.location.lon,
+                  type: 'crossing'
+                });
+              });
+            }
+          });
+          
+          setSpeedLimits(speeds);
+          setTrafficControls(controls);
+        }
+      }).catch((err) => {
+        console.warn('Failed to fetch route details:', err);
+      });
+    }
+  }, [routeDto?.id, routeDto?.payload]);
   const [tracking, setTracking] = useState(false);
   const [navPhase, setNavPhase] = useState<'TO_START' | 'ON_GPX' | 'FINISHED'>('TO_START');
   const navPhaseRef = useRef<'TO_START' | 'ON_GPX' | 'FINISHED'>('TO_START');
@@ -114,6 +186,62 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
   const distanceMRef = useRef(0);
   const [speedMps, setSpeedMps] = useState(0);
   const [onRoute, setOnRoute] = useState(false);
+  // Extract speed limits and controls from route payload
+  useEffect(() => {
+    if (routeDto?.payload?.instructions) {
+      const speeds: Array<{lat: number, lon: number, speed: number}> = [];
+      const controls: Array<{lat: number, lon: number, type: string}> = [];
+      
+      routeDto.payload.instructions.forEach((ins: any) => {
+        if (ins.speed_limit_mph_final && ins.location) {
+          speeds.push({
+            lat: ins.location.lat,
+            lon: ins.location.lon,
+            speed: ins.speed_limit_mph_final
+          });
+        }
+        if (ins.traffic_signals && Array.isArray(ins.traffic_signals) && ins.location) {
+          ins.traffic_signals.forEach(() => {
+            controls.push({
+              lat: ins.location.lat,
+              lon: ins.location.lon,
+              type: 'traffic_signals'
+            });
+          });
+        }
+        if (ins.stop && Array.isArray(ins.stop) && ins.location) {
+          ins.stop.forEach(() => {
+            controls.push({
+              lat: ins.location.lat,
+              lon: ins.location.lon,
+              type: 'stop'
+            });
+          });
+        }
+        if (ins.give_way && Array.isArray(ins.give_way) && ins.location) {
+          ins.give_way.forEach(() => {
+            controls.push({
+              lat: ins.location.lat,
+              lon: ins.location.lon,
+              type: 'give_way'
+            });
+          });
+        }
+        if (ins.crossing && Array.isArray(ins.crossing) && ins.location) {
+          ins.crossing.forEach(() => {
+            controls.push({
+              lat: ins.location.lat,
+              lon: ins.location.lon,
+              type: 'crossing'
+            });
+          });
+        }
+      });
+      
+      setSpeedLimits(speeds);
+      setTrafficControls(controls);
+    }
+  }, [routeDto?.payload]);
   const onRouteRef = useRef(false);
   const [initialCentered, setInitialCentered] = useState(false);
   const [navToStart, setNavToStart] = useState<LatLng[]>([]);
@@ -126,7 +254,7 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
   const [navSteps, setNavSteps] = useState<NavStep[]>([]);
   const [navPackage, setNavPackage] = useState<NavPackage | null>(null);
   const [navPackageStatus, setNavPackageStatus] = useState<
-    'idle' | 'loading' | 'matching' | 'directions'
+    'idle' | 'loading' | 'matching' | 'directions' | 'enriched'
   >('idle');
   const [navPackageError, setNavPackageError] = useState<string | null>(null);
   const [routeLocalization, setRouteLocalization] = useState<LocalizationResult | null>(null);
@@ -191,7 +319,7 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
     setNavDestination(value);
   };
 
-  const applyNavPackage = (pkg: NavPackage, status: 'matching' | 'directions') => {
+  const applyNavPackage = (pkg: NavPackage, status: 'matching' | 'directions' | 'enriched') => {
     const normalizedSteps = normalizeStepRanges(pkg.steps);
     const normalizedPackage = { ...pkg, steps: normalizedSteps };
     navPackageRef.current = normalizedPackage;
@@ -231,11 +359,13 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
           : polyline;
   const navReady = navPackageStatus !== 'loading' && navPackage !== null;
   const navSourceLabel =
-    navPackageStatus === 'matching'
-      ? 'Using Map Matching'
-      : navRoute.length > 1 || navPackageStatus === 'directions'
-        ? 'Using Directions'
-        : 'Using raw GPX (no snap)';
+    navPackageStatus === 'enriched'
+      ? 'Using Enriched Instructions'
+      : navPackageStatus === 'matching'
+        ? 'Using Map Matching'
+        : navRoute.length > 1 || navPackageStatus === 'directions'
+          ? 'Using Directions'
+          : 'Using raw GPX (no snap)';
   const routeDistances = useMemo(
     () => (navPackage?.cumDist?.length ? navPackage.cumDist : buildRouteDistances(routeLine)),
     [navPackage, routeLine],
@@ -573,6 +703,12 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
     setInstructionState(null);
     setRouteLocalization(null);
     setRejoinRoute([]);
+    // Use enriched instructions if available
+    if (routeDto?.payload?.instructions?.length) {
+      const enrichedPackage = buildNavPackageFromInstructions(polyline, routeDto.payload.instructions, 'enriched');
+      applyNavPackage(enrichedPackage, 'enriched');
+      return () => {};
+    }
     if (!hasMapboxToken) {
       const fallbackSteps = buildStepsFromPolyline(polyline);
       const fallbackPackage = buildNavPackageFromDirections(polyline, fallbackSteps, 'local');
@@ -1340,7 +1476,7 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
         ) : (
           <MapboxGL.MapView
             style={StyleSheet.absoluteFill}
-            styleURL="mapbox://styles/mapbox/navigation-day-v1"
+            styleURL="mapbox://styles/mapbox/navigation-night-v1"
             compassEnabled={false}
             rotateEnabled
             onRegionWillChange={(feature) => {
@@ -1453,6 +1589,27 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
                 <MapboxGL.PointAnnotation id="finish" coordinate={[endPoint.longitude, endPoint.latitude]}>
                   <View style={styles.finishMarker} />
                 </MapboxGL.PointAnnotation>
+                {speedLimits.map((sl, idx) => (
+                  <MapboxGL.PointAnnotation key={`speed-${idx}`} id={`speed-${idx}`} coordinate={[sl.lon, sl.lat]}>
+                    <View style={styles.speedLimitMarker}>
+                      <Text style={styles.speedLimitText}>{sl.speed}</Text>
+                    </View>
+                  </MapboxGL.PointAnnotation>
+                ))}
+                {trafficControls.map((tc, idx) => (
+                  <MapboxGL.PointAnnotation key={`control-${idx}`} id={`control-${idx}`} coordinate={[tc.lon, tc.lat]}>
+                    <View style={styles.controlMarker}>
+                      <MaterialCommunityIcons 
+                        name={tc.type === 'traffic_signals' ? 'traffic-light' : 
+                              tc.type === 'stop' ? 'stop' : 
+                              tc.type === 'give_way' ? 'arrow-up' : 
+                              tc.type === 'crossing' ? 'walk' : 'map-marker'}
+                        size={20} 
+                        color="#fff" 
+                      />
+                    </View>
+                  </MapboxGL.PointAnnotation>
+                ))}
               </>
             )}
           </MapboxGL.MapView>
@@ -1465,7 +1622,7 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
           }}
           style={[
             styles.topBanner,
-            { paddingTop: insets.top + spacing(0.1), paddingBottom: spacing(0.35) },
+            { paddingTop: insets.top + spacing(1) },
           ]}
         >
           <View style={styles.topBannerRow}>
@@ -1493,15 +1650,23 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
             />
           </View>
           {!!laneGuidance.length && (
-            <View style={styles.laneRow}>
+            <View style={styles.laneContainer}>
               {laneGuidance.map((lane, idx) => (
                 <View
                   key={`lane-${idx}-${lane.directions.join('-')}`}
-                  style={[styles.lanePill, lane.active && styles.lanePillActive]}
+                  style={[styles.laneBox, lane.active && styles.laneBoxActive]}
                 >
-                  <Text style={[styles.laneText, lane.active && styles.laneTextActive]}>
-                    {formatLaneDirections(lane.directions)}
-                  </Text>
+                  <View style={styles.laneArrows}>
+                    {lane.directions.map((direction, dirIdx) => (
+                      <MaterialCommunityIcons
+                        key={`arrow-${dirIdx}`}
+                        name={getLaneArrowIcon(direction)}
+                        size={16}
+                        color={lane.active ? '#fff' : '#94a3b8'}
+                        style={styles.laneArrow}
+                      />
+                    ))}
+                  </View>
                 </View>
               ))}
             </View>
@@ -1565,7 +1730,7 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
       )}
 
       {!useNativeNav && (
-        <View style={[styles.controls, { top: insets.top + spacing(1) }]}>
+        <View style={[styles.controls, { top: insets.top + spacing(10) }]}>
           <IconButton
             mode="contained"
             icon="compass-outline"
@@ -1584,7 +1749,9 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
                 });
               }
             }}
-            style={styles.controlButtonSpacer}
+            style={styles.controlButton}
+            iconColor="#fff"
+            size={20}
           />
           <IconButton
             mode="contained"
@@ -1606,6 +1773,9 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
                 cameraRef.current.fitBounds(cameraBounds.ne, cameraBounds.sw, 80, 500);
               }
             }}
+            style={styles.controlButton}
+            iconColor="#fff"
+            size={20}
           />
           <IconButton
             mode="contained"
@@ -1617,7 +1787,9 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
                 cameraRef.current.fitBounds(cameraBounds.ne, cameraBounds.sw, 80, 600);
               }
             }}
-            style={styles.controlButtonSpacer}
+            style={styles.controlButton}
+            iconColor="#fff"
+            size={20}
           />
         </View>
       )}
@@ -1659,30 +1831,27 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
       )}
 
       {!useNativeNav && (
-        <Card style={styles.bottomSheet}>
-          <Card.Content>
-            <Text variant="titleMedium" style={{ color: '#fff', fontWeight: '700' }}>
-              {routeDto.name}
-            </Text>
-            <Text style={{ color: '#7c90b8', marginTop: spacing(0.5) }}>{navSourceLabel}</Text>
-            <Text style={{ color: '#94a3b8' }}>
-              {!onRoute
-                ? 'Ready to start'
-                : `Remain ${formatDistanceShort(
-                    useNativeNav && nativeDistanceRemaining !== null ? nativeDistanceRemaining : distanceRemaining,
-                  )} • ETA ${etaMinutes.toFixed(0)} min`}
-            </Text>
-            <ProgressBar
-              progress={
-                distanceRemaining > 0 && routeDto.distanceM
-                  ? Math.max(0, 1 - distanceRemaining / routeDto.distanceM)
-                  : 0
-              }
-              color={colors.primary}
-              style={{ marginVertical: spacing(1) }}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Button mode="outlined" onPress={() => finishTracking(false)} disabled={!tracking}>
+        <View style={styles.bottomSheet}>
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomInfo}>
+              <Text style={styles.bottomTime}>
+                {etaMinutes > 0 ? `${etaMinutes.toFixed(0)} min` : '--'}
+              </Text>
+              <Text style={styles.bottomDistance}>
+                {formatDistanceShort(
+                  useNativeNav && nativeDistanceRemaining !== null ? nativeDistanceRemaining : distanceRemaining,
+                )}
+              </Text>
+            </View>
+            <View style={styles.bottomControls}>
+              <Button 
+                mode="outlined" 
+                onPress={() => finishTracking(false)} 
+                disabled={!tracking}
+                style={{ borderColor: '#666', borderRadius: 20 }}
+                labelStyle={{ color: '#fff' }}
+                contentStyle={{ paddingHorizontal: spacing(1) }}
+              >
                 Stop
               </Button>
               {!tracking ? (
@@ -1694,8 +1863,10 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
                     setToast(`You are ${formatDistanceShort(dist)} from start. Head there to begin.`);
                     startTracking();
                   }}
+                  style={{ borderRadius: 20, backgroundColor: '#1e88e5' }}
+                  contentStyle={{ paddingHorizontal: spacing(1.5) }}
                 >
-                  {navReady ? 'Start' : 'Preparing navigation...'}
+                  {navReady ? 'Start' : '...'}
                 </Button>
               ) : (
                 <Button
@@ -1708,13 +1879,18 @@ const PracticeScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navigati
                       finishTracking(true);
                     }
                   }}
+                  style={{ borderRadius: 20, backgroundColor: '#1e88e5' }}
+                  contentStyle={{ paddingHorizontal: spacing(1.5) }}
                 >
                   Finish
                 </Button>
               )}
             </View>
-          </Card.Content>
-        </Card>
+          </View>
+          <Text style={{ color: '#888', fontSize: 12, textAlign: 'center', marginTop: spacing(0.5) }}>
+            {routeDto.name}
+          </Text>
+        </View>
       )}
 
       <Portal>
@@ -1794,30 +1970,48 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   speedBubble: {
     position: 'absolute',
-    bottom: spacing(22),
+    bottom: spacing(18),
     left: spacing(2),
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#1e88e5',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#1e1e1e',
+    borderWidth: 3,
+    borderColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  speedValue: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  speedUnit: { color: '#dfe6ff', fontSize: 12, marginTop: -2 },
+  speedValue: { 
+    color: '#fff', 
+    fontSize: 22, 
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  speedUnit: { 
+    color: '#b0b0b0', 
+    fontSize: 12, 
+    fontWeight: '600',
+    marginTop: -2,
+    textAlign: 'center'
+  },
   controls: {
     position: 'absolute',
-    right: spacing(1),
-    top: spacing(14),
-    flexDirection: 'row',
-    alignItems: 'center',
+    right: spacing(1.5),
+    top: spacing(10),
+    alignItems: 'flex-end',
   },
-  controlButtonSpacer: { marginRight: spacing(0.5) },
+  controlButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 20,
+    marginBottom: spacing(1),
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
   nativeControls: {
     position: 'absolute',
     left: spacing(2),
@@ -1835,96 +2029,188 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: spacing(6),
-    left: spacing(2),
+    top: spacing(1),
+    left: spacing(1.5),
     zIndex: 20,
     elevation: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   bottomSheet: {
     position: 'absolute',
-    bottom: spacing(2),
-    left: spacing(2),
-    right: spacing(2),
-    borderRadius: 22,
-    backgroundColor: '#0b0b0b',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    elevation: 12,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    elevation: 15,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: -5 },
+    paddingTop: spacing(1.5),
+    paddingBottom: spacing(1),
+    paddingHorizontal: spacing(2),
+  },
+  bottomSheetContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing(1.5),
+  },
+  bottomInfo: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  bottomTime: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  bottomDistance: {
+    color: '#b0b0b0',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: spacing(0.25),
+  },
+  bottomControls: {
+    flexDirection: 'row',
+    gap: spacing(1),
   },
   topBanner: {
     position: 'absolute',
     left: 0,
     right: 0,
+    top: 0,
+    paddingTop: spacing(1),
+    paddingBottom: spacing(1.5),
     paddingHorizontal: spacing(2),
-    backgroundColor: '#0b0b0b',
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     elevation: 10,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
   },
-  topBannerRow: { flexDirection: 'row', alignItems: 'center' },
-  bannerIcon: { marginRight: spacing(1) },
+  topBannerRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  bannerIcon: { 
+    marginRight: spacing(1.5),
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: spacing(0.5)
+  },
   bannerTextWrap: { flex: 1 },
-  bannerDistance: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  bannerPrimary: { color: '#fff', fontSize: 12, fontWeight: '700', marginTop: spacing(0.1) },
-  bannerSecondary: { color: '#5ecbff', fontSize: 11, fontWeight: '700' },
-  bannerMuteButton: { marginLeft: spacing(1) },
-  laneRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing(0.25) },
-  lanePill: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: spacing(0.75),
-    paddingVertical: spacing(0.25),
-    marginRight: spacing(0.5),
-    marginTop: spacing(0.5),
+  bannerDistance: { 
+    color: '#fff', 
+    fontSize: 24, 
+    fontWeight: '900',
+    textAlign: 'center'
   },
-  lanePillActive: {
+  bannerPrimary: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: '700', 
+    marginTop: spacing(0.25),
+    textAlign: 'center'
+  },
+  bannerSecondary: { 
+    color: '#4ade80', 
+    fontSize: 14, 
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  bannerMuteButton: { 
+    marginLeft: spacing(1),
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20
+  },
+  laneContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    marginTop: spacing(0.5),
+    paddingHorizontal: spacing(2)
+  },
+  laneBox: {
+    width: 40,
+    height: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    marginHorizontal: spacing(0.5),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  laneBoxActive: {
     backgroundColor: '#1e88e5',
     borderColor: '#1e88e5',
   },
-  laneText: { color: '#e2e8f0', fontSize: 12, fontWeight: '600' },
-  laneTextActive: { color: '#fff' },
+  laneArrows: {
+    alignItems: 'center',
+  },
+  laneArrow: {
+    marginVertical: 1,
+  },
   toastBanner: {
     position: 'absolute',
     left: spacing(2),
     right: spacing(2),
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderRadius: 14,
+    top: spacing(12),
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    borderRadius: 20,
     paddingVertical: spacing(1),
     paddingHorizontal: spacing(1.5),
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
     zIndex: 6,
   },
   toastText: {
     color: '#fff',
     textAlign: 'center',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 14,
   },
   rejoinHint: {
     position: 'absolute',
     left: spacing(2),
     right: spacing(2),
+    top: spacing(9),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(239, 68, 68, 0.95)',
+    borderRadius: 20,
     paddingHorizontal: spacing(1.5),
-    paddingVertical: spacing(0.75),
+    paddingVertical: spacing(1),
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
     zIndex: 8,
   },
   rejoinText: {
-    color: '#e2e8f0',
-    fontWeight: '700',
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
   },
   debugOverlay: {
     position: 'absolute',
@@ -1943,6 +2229,31 @@ const styles = StyleSheet.create({
   },
   startMarker: { width: 12, height: 12, borderRadius: 6, backgroundColor: 'green', borderWidth: 2, borderColor: '#fff' },
   finishMarker: { width: 12, height: 12, borderRadius: 6, backgroundColor: 'red', borderWidth: 2, borderColor: '#fff' },
+  speedLimitMarker: { 
+    width: 30, 
+    height: 30, 
+    borderRadius: 15, 
+    backgroundColor: '#2563eb', 
+    borderWidth: 2, 
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  speedLimitText: { 
+    color: '#fff', 
+    fontSize: 12, 
+    fontWeight: 'bold' 
+  },
+  controlMarker: { 
+    width: 24, 
+    height: 24, 
+    borderRadius: 12, 
+    backgroundColor: '#dc2626', 
+    borderWidth: 2, 
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   rewardModal: {
     backgroundColor: '#fff',
     marginHorizontal: spacing(3),
@@ -2014,21 +2325,17 @@ const formatManeuverSubtitle = (step?: NavStep | null, onRoute = false) => {
   return onRoute ? 'Follow the route' : 'Head to start';
 };
 
-const formatLaneDirections = (directions: string[]) => {
-  if (!directions.length) return '';
-  const formatted = directions.map((dir) => {
-    const normalized = dir.toLowerCase();
-    if (normalized === 'straight') return 'S';
-    if (normalized === 'left') return 'L';
-    if (normalized === 'right') return 'R';
-    if (normalized === 'slight left') return 'SL';
-    if (normalized === 'slight right') return 'SR';
-    if (normalized === 'sharp left') return 'HL';
-    if (normalized === 'sharp right') return 'HR';
-    if (normalized === 'uturn') return 'U';
-    return normalized.toUpperCase().slice(0, 2);
-  });
-  return formatted.join(' ');
+const getLaneArrowIcon = (direction: string): keyof typeof MaterialCommunityIcons.glyphMap => {
+  const normalized = direction.toLowerCase();
+  if (normalized === 'straight' || normalized === 'straight-ahead') return 'arrow-up';
+  if (normalized === 'left') return 'arrow-left';
+  if (normalized === 'right') return 'arrow-right';
+  if (normalized === 'slight left') return 'arrow-top-left';
+  if (normalized === 'slight right') return 'arrow-top-right';
+  if (normalized === 'sharp left') return 'arrow-left';
+  if (normalized === 'sharp right') return 'arrow-right';
+  if (normalized === 'uturn') return 'rotate-3d-variant';
+  return 'arrow-up';
 };
 
 const getManeuverIconName = (
@@ -2438,6 +2745,74 @@ const buildNavPackageFromDirections = (routeLine: LatLng[], steps: NavStep[], so
       radiusesUsed: 0,
       chunks: 1,
       warnings: [`fallback:${source}`],
+    },
+  };
+};
+
+const buildNavPackageFromInstructions = (routeLine: LatLng[], instructions: any[], source: string): NavPackage => {
+  const matchedPolyline = routeLine;
+  const cumDist = buildCumulativeDistances(matchedPolyline);
+  const total = cumDist.length ? cumDist[cumDist.length - 1] : 0;
+  const steps: MatchingStep[] = instructions.map((ins, idx) => {
+    const location = ins.location || { lat: ins.lat, lon: ins.lon };
+    const distanceAlongRoute = idx === 0 ? 0 : cumDist[Math.min(idx * Math.floor(cumDist.length / instructions.length), cumDist.length - 1)] || 0;
+
+    // Enhanced instruction text building
+    let instructionText = ins.direction || 'Continue';
+    let voiceAnnouncement = ins.direction || 'Continue';
+
+    if (ins.action_type === 'roundabout' && ins.roundabout_exit_number_inferred) {
+      const exitNum = ins.roundabout_exit_number_inferred;
+      instructionText = `At the roundabout, take the ${formatOrdinal(exitNum)} exit`;
+      voiceAnnouncement = `At the roundabout, take the ${formatOrdinal(exitNum)} exit`;
+      if (ins.road) {
+        instructionText += ` onto ${ins.road}`;
+        voiceAnnouncement += ` onto ${ins.road}`;
+      }
+    } else if (ins.road && ins.direction) {
+      instructionText = `${ins.direction} onto ${ins.road}`;
+      voiceAnnouncement = `${ins.direction} onto ${ins.road}`;
+    }
+
+    return {
+      stepIndexGlobal: idx,
+      maneuver: {
+        type: ins.action_type === 'roundabout' ? 'roundabout' : (ins.direction?.includes('straight') ? 'continue' : ins.direction?.includes('left') || ins.direction?.includes('right') ? 'turn' : 'continue'),
+        modifier: ins.action_type === 'roundabout' ? undefined : (ins.direction?.includes('left') ? 'left' : ins.direction?.includes('right') ? 'right' : undefined),
+        location: { latitude: location.lat, longitude: location.lon },
+        exit: ins.roundabout_exit_number_inferred || undefined,
+      },
+      bannerInstructions: [{
+        distanceAlongGeometry: 0,
+        primary: {
+          text: instructionText,
+          components: [{ text: instructionText }],
+        },
+      }],
+      voiceInstructions: [{
+        distanceAlongGeometry: 0,
+        announcement: voiceAnnouncement,
+      }],
+      distanceAlongRoute,
+      distance: ins.distance || 0,
+      name: ins.road || ins.road_name || '',
+    };
+  });
+  return {
+    id: `enriched_${source}_${hashString(JSON.stringify(matchedPolyline.map((c) => [roundCoord(c.latitude), roundCoord(c.longitude)])))}`,
+    originalPolyline: matchedPolyline,
+    matchedPolyline,
+    cumDist,
+    steps,
+    routeLengthM: total,
+    startCoord: matchedPolyline[0],
+    endCoord: matchedPolyline[matchedPolyline.length - 1],
+    meta: {
+      createdAt: Date.now(),
+      profile: 'driving',
+      radiusesUsed: 0,
+      chunks: 1,
+      warnings: [`enriched:${source}`],
     },
   };
 };

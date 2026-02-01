@@ -109,20 +109,8 @@ const RouteDetailScreen: React.FC<NativeStackScreenProps<any>> = ({ route, navig
               <Button
                 mode="outlined"
                 style={{ marginTop: spacing(1) }}
-                onPress={async () => {
-                  if (isDownloaded) {
-                    navigation.navigate('Practice', { route: routeDto });
-                    return;
-                  }
-                  // ensure we have full geojson/gpx before practice
-                  try {
-                    const res = await apiRoutes.detail(routeDto.id);
-                    const data = res.data.data || (res.data as any);
-                    setRouteDto(data);
-                    navigation.navigate('Practice', { route: data });
-                  } catch {
-                    navigation.navigate('Practice', { route: routeDto });
-                  }
+                onPress={() => {
+                  navigation.navigate('Practice', { route: routeDto });
                 }}
               >
                 Start practice

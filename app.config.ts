@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { ExpoConfig } from '@expo/config-types';
 
+const sentryUrl = process.env.SENTRY_URL || 'https://sentry.io/';
+const sentryOrg = process.env.SENTRY_ORG || 'drivest';
+const sentryProject = process.env.SENTRY_PROJECT || 'react-native';
+
 const config: ExpoConfig = {
   name: 'Drivest',
   slug: 'drivest-app',
@@ -46,7 +50,7 @@ const config: ExpoConfig = {
     favicon: './assets/favicon.png',
   },
   plugins: [
-    '@sentry/react-native',
+    ['@sentry/react-native/expo', { url: sentryUrl, organization: sentryOrg, project: sentryProject }],
     'expo-font',
     'expo-location',
     'expo-notifications',

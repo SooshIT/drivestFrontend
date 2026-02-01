@@ -21,6 +21,7 @@ const ensureDbReady = async () => {
           geojson TEXT,
           gpx TEXT,
           bbox TEXT,
+          payload TEXT,
           version INTEGER,
           updatedAt INTEGER
         );
@@ -55,8 +56,8 @@ export const saveDownloadedRoute = async (route: any) => {
   await ensureDbReady();
   const db = await dbPromise;
   await db.runAsync(
-    `INSERT OR REPLACE INTO downloaded_routes (id, centreId, name, distanceM, durationEstS, difficulty, polyline, geojson, gpx, bbox, version, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    `INSERT OR REPLACE INTO downloaded_routes (id, centreId, name, distanceM, durationEstS, difficulty, polyline, geojson, gpx, bbox, payload, version, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       route.id,
       route.centreId,
@@ -68,6 +69,7 @@ export const saveDownloadedRoute = async (route: any) => {
       JSON.stringify(route.geojson || null),
       route.gpx || null,
       JSON.stringify(route.bbox || {}),
+      JSON.stringify(route.payload || null),
       route.version,
       Date.now(),
     ],

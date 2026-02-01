@@ -40,6 +40,7 @@ export type RouteDto = {
   bbox: any;
   geojson?: any;
   gpx?: string | null;
+  payload?: any;
   version: number;
   isActive: boolean;
   centre?: TestCentre;

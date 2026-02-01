@@ -201,7 +201,7 @@ const normalizeVoiceInstructions = (step: DirectionsStep): VoiceInstruction[] =>
   return instructions.map((item) => ({
     distanceAlongGeometry: item.distanceAlongGeometry,
     announcement: item.announcement,
-    ssmlAnnouncement: 'ssml_announcement' in item ? item.ssml_announcement : item.ssmlAnnouncement,
+    ssmlAnnouncement: 'ssml_announcement' in item ? (item as any).ssml_announcement : item.ssmlAnnouncement,
   }));
 };
 
