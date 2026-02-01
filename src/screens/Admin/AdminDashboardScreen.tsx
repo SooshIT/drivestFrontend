@@ -6,6 +6,9 @@ import { apiAdmin, apiCentres } from '../../api';
 import { spacing, colors } from '../../styles/theme';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import MapboxSearchBox from '../../components/MapboxSearchBox';
+import { SearchResult } from '../../types/mapbox';
+import { extractPostcode, isUKLocation } from '../../utils/mapbox';
 
 const AdminDashboardScreen: React.FC = () => {
   const qc = useQueryClient();
@@ -13,6 +16,8 @@ const AdminDashboardScreen: React.FC = () => {
   const [centreId, setCentreId] = useState<string>('');
   const [centreName, setCentreName] = useState('');
   const [postcode, setPostcode] = useState('');
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [routeName, setRouteName] = useState('');
   const [centres, setCentres] = useState<any[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -32,6 +37,27 @@ const AdminDashboardScreen: React.FC = () => {
       .catch(() => setCentres([]));
   }, []);
   const totalCentres = useMemo(() => centres.length, [centres]);
+
+  const handleAddressSelect = (result: SearchResult) => {
+    const [lng, lat] = result.center;
+    
+    // Validate UK location
+    if (!isUKLocation(lng, lat)) {
+      setToast('Please select a UK location.');
+      return;
+    }
+
+    setSelectedAddress(result.place_name);
+    setCoordinates({ lat, lng });
+    
+    // Extract postcode from result or address
+    const extractedPostcode = result.context?.find((c) => c.id.startsWith('postcode'))?.text 
+      || extractPostcode(result.place_name);
+    
+    if (extractedPostcode) {
+      setPostcode(extractedPostcode);
+    }
+  };
 
   const pickAndUpload = async () => {
     if (!centreId && !centreName.trim()) {
@@ -68,6 +94,8 @@ const AdminDashboardScreen: React.FC = () => {
       setCentreName('');
       setPostcode('');
       setRouteName('');
+      setSelectedAddress(null);
+      setCoordinates(null);
       if (!centreId) setCentreId('');
       // refresh centre/route lists for Explore + Centre Detail screens
       qc.invalidateQueries({ queryKey: ['centres'] });
@@ -113,14 +141,40 @@ const AdminDashboardScreen: React.FC = () => {
               </View>
             ))}
           </RadioButton.Group>
+          <Divider style={{ marginVertical: spacing(1.5) }} />
+          <Text variant="titleSmall" style={{ marginBottom: spacing(1) }}>
+            Or create a new test centre:
+          </Text>
           <TextInput
             label="New centre name (required if not selected)"
             value={centreName}
             onChangeText={setCentreName}
             style={{ marginTop: spacing(1) }}
           />
+          <View style={{ marginTop: spacing(1.5) }}>
+            <Text variant="bodySmall" style={{ marginBottom: spacing(0.5), color: colors.muted }}>
+              Search for centre address:
+            </Text>
+            <MapboxSearchBox
+              placeholder="Search for test centre address"
+              onSelectResult={handleAddressSelect}
+            />
+          </View>
+          {selectedAddress && (
+            <Chip
+              icon="map-marker"
+              onClose={() => {
+                setSelectedAddress(null);
+                setCoordinates(null);
+                setPostcode('');
+              }}
+              style={{ marginTop: spacing(1), alignSelf: 'flex-start' }}
+            >
+              {selectedAddress}
+            </Chip>
+          )}
           <TextInput
-            label="Postcode (required if not selected)"
+            label="Postcode (auto-filled or enter manually)"
             value={postcode}
             onChangeText={setPostcode}
             style={{ marginTop: spacing(1) }}
