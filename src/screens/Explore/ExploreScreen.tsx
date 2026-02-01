@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput, Button, Text, SegmentedButtons, Card } from 'react-native-paper';
+import { TextInput, Button, Text, SegmentedButtons, Card, Chip } from 'react-native-paper';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import CentreCard from '../../components/CentreCard';
+import MapboxSearchBox from '../../components/MapboxSearchBox';
 import { apiCentres, TestCentre } from '../../api';
 import { spacing, colors } from '../../styles/theme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import LocationConsentModal from '../../components/LocationConsentModal';
 import { CONSENT_KEYS, consentNow, getConsentValue, setConsentValue } from '../../utils/consent';
+import { SearchResult } from '../../types/mapbox';
 
 const ExploreScreen: React.FC<NativeStackScreenProps<any>> = ({ navigation }) => {
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [near, setNear] = useState<string | undefined>();
+  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [goalChoice, setGoalChoice] = useState('1');
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
   const [pendingNear, setPendingNear] = useState(false);
@@ -39,6 +42,21 @@ const ExploreScreen: React.FC<NativeStackScreenProps<any>> = ({ navigation }) =>
     if (perm.status !== 'granted') return;
     const loc = await Location.getCurrentPositionAsync({ accuracy: 3 });
     setNear(`${loc.coords.latitude},${loc.coords.longitude}`);
+    setSelectedLocation('Your location');
+    setQuery(''); // Clear text search when using location
+  };
+
+  const handleAddressSelect = (result: SearchResult) => {
+    const [lng, lat] = result.center;
+    setNear(`${lat},${lng}`);
+    setSelectedLocation(result.place_name);
+    setQuery(''); // Clear text search when using address search
+  };
+
+  const handleClearSearch = () => {
+    setNear(undefined);
+    setSelectedLocation(null);
+    setQuery('');
   };
 
   return (
@@ -54,19 +72,34 @@ const ExploreScreen: React.FC<NativeStackScreenProps<any>> = ({ navigation }) =>
         </Card>
 
         <View style={styles.searchCard}>
-          <TextInput
-            placeholder="Search by postcode, city, centre name"
-            value={input}
-            onChangeText={setInput}
-            mode="outlined"
-            right={<TextInput.Icon icon="magnify" onPress={() => setQuery(input.trim())} />}
-            style={{ marginBottom: spacing(1) }}
-            returnKeyType="search"
-            onSubmitEditing={() => setQuery(input.trim())}
+          <MapboxSearchBox
+            placeholder="Search by address or postcode"
+            onSelectResult={handleAddressSelect}
           />
-          <Button mode="contained" onPress={handleNearMe}>
-            Near me
-          </Button>
+          <View style={styles.searchActions}>
+            <TextInput
+              placeholder="Or search by centre name"
+              value={input}
+              onChangeText={setInput}
+              mode="outlined"
+              right={<TextInput.Icon icon="magnify" onPress={() => setQuery(input.trim())} />}
+              style={styles.nameSearchInput}
+              returnKeyType="search"
+              onSubmitEditing={() => setQuery(input.trim())}
+            />
+            <Button mode="contained" onPress={handleNearMe} style={styles.nearMeButton}>
+              Near me
+            </Button>
+          </View>
+          {selectedLocation && (
+            <Chip
+              icon="map-marker"
+              onClose={handleClearSearch}
+              style={styles.locationChip}
+            >
+              {selectedLocation}
+            </Chip>
+          )}
         </View>
 
         <Card style={styles.goalCard}>
@@ -106,6 +139,7 @@ const ExploreScreen: React.FC<NativeStackScreenProps<any>> = ({ navigation }) =>
             setPendingNear(false);
             const loc = await Location.getCurrentPositionAsync({ accuracy: 3 });
             setNear(`${loc.coords.latitude},${loc.coords.longitude}`);
+            setSelectedLocation('Your location');
           }
         }}
         onSkip={async () => {
@@ -135,6 +169,19 @@ const styles = StyleSheet.create({
     padding: spacing(2),
     marginBottom: spacing(2),
     elevation: 1,
+  },
+  searchActions: {
+    marginTop: spacing(1.5),
+  },
+  nameSearchInput: {
+    marginBottom: spacing(1),
+  },
+  nearMeButton: {
+    marginTop: spacing(0.5),
+  },
+  locationChip: {
+    marginTop: spacing(1.5),
+    alignSelf: 'flex-start',
   },
   goalCard: { marginBottom: spacing(2.5), borderRadius: 16 },
 });

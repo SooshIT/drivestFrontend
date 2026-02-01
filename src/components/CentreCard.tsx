@@ -10,11 +10,21 @@ interface Props {
 }
 
 const CentreCard: React.FC<Props> = ({ centre, onPress }) => {
+  // Format address display - show address if available, otherwise show city and postcode
+  const addressDisplay = centre.address 
+    ? `${centre.address}, ${centre.city}` 
+    : `${centre.city}, ${centre.postcode}`;
+
   return (
     <Card style={styles.card} onPress={onPress}>
       <Card.Content>
         <Text variant="titleMedium">{centre.name}</Text>
-        <Text style={{ color: colors.muted, marginTop: spacing(0.25) }}>{centre.postcode}</Text>
+        <Text style={{ color: colors.muted, marginTop: spacing(0.25) }}>
+          {addressDisplay}
+        </Text>
+        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
+          {centre.postcode}
+        </Text>
       </Card.Content>
       <Card.Actions>
         <Button mode="contained-tonal" onPress={onPress}>
